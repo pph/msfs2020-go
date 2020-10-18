@@ -19,6 +19,7 @@ import (
 	"github.com/lian/msfs2020-go/simconnect"
 	"github.com/lian/msfs2020-go/vfrmap/html/leafletjs"
 	"github.com/lian/msfs2020-go/vfrmap/websockets"
+	"github.com/twpayne/go-kml"
 )
 
 type Report struct {
@@ -89,6 +90,17 @@ func (r *TeleportRequest) SetData(s *simconnect.SimConnect) {
 	s.SetDataOnSimObject(defineID, simconnect.OBJECT_ID_USER, 0, 0, size, unsafe.Pointer(&buf[0]))
 }
 
+type SimOnGroundRequest struct {
+	simconnect.RecvSimobjectDataByType
+	IsOnGround bool `name:"SIM ON GROUND"`
+}
+
+func (sim *SimOnGroundRequest) RequestData(s *simconnect.SimConnect) {
+	defineID := s.GetDefineID(sim)
+	requestID := defineID
+	s.RequestDataOnSimObjectType(requestID, defineID, 0, simconnect.SIMOBJECT_TYPE_USER)
+}
+
 var buildVersion string
 var buildTime string
 var disableTeleport bool
@@ -107,6 +119,9 @@ func main() {
 	exitSignal := make(chan os.Signal, 1)
 	signal.Notify(exitSignal, os.Interrupt, syscall.SIGTERM)
 	exePath, _ := os.Executable()
+
+	var coordinates []kml.Coordinate
+	var inFlight bool
 
 	ws := websockets.New()
 
@@ -133,6 +148,16 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	simonGroundRequest := &SimOnGroundRequest{}
+	/*
+		err = s.RegisterDataDefinition(simonGroundRequest)
+		if err != nil {
+			panic(err)
+		}
+	*/
+
+	s.AddToDataDefinition(s.GetDefineID(simonGroundRequest), "SIM ON GROUND", "Bool", simconnect.DATATYPE_INT32)
 
 	eventSimStartID := s.GetEventID()
 	//s.SubscribeToSystemEvent(eventSimStartID, "SimStart")
@@ -174,6 +199,7 @@ func main() {
 	simconnectTick := time.NewTicker(100 * time.Millisecond)
 	planePositionTick := time.NewTicker(200 * time.Millisecond)
 	trafficPositionTick := time.NewTicker(10000 * time.Millisecond)
+	kmlCoordinateTick := time.NewTicker(3000 * time.Millisecond)
 
 	for {
 		select {
@@ -185,6 +211,23 @@ func main() {
 			//trafficReport.RequestData(s)
 			//s.RequestFacilitiesList(simconnect.FACILITY_LIST_TYPE_AIRPORT, airportRequestID)
 			//s.RequestFacilitiesList(simconnect.FACILITY_LIST_TYPE_WAYPOINT, waypointRequestID)
+		case <-kmlCoordinateTick.C:
+			simonGroundRequest.RequestData(s)
+			if !simonGroundRequest.IsOnGround {
+				if !inFlight {
+					inFlight = true
+					fmt.Println("Flight has started!")
+				}
+				coordinates = append(coordinates,
+					kml.Coordinate{report.Longitude, report.Latitude, report.Altitude})
+			} else {
+				if inFlight {
+					fmt.Println("Flight has stopped, writing KML...")
+					writeKML(coordinates)
+					coordinates = []kml.Coordinate{}
+					inFlight = false
+				}
+			}
 
 		case <-simconnectTick.C:
 			ppData, r1, err := s.GetNextDispatch()
@@ -267,6 +310,10 @@ func main() {
 				case s.DefineMap["TrafficReport"]:
 					trafficReport = (*TrafficReport)(ppData)
 					fmt.Printf("TRAFFIC REPORT: %s\n", trafficReport.Inspect())
+
+				case s.DefineMap["SimOnGroundRequest"]:
+					simonGroundRequest = (*SimOnGroundRequest)(ppData)
+					fmt.Println("SIM ON GROUND: ", simonGroundRequest.IsOnGround)
 				}
 
 			default:
@@ -328,4 +375,21 @@ func handleClientMessage(m websockets.ReceiveMessage, s *simconnect.SimConnect) 
 			r.SetData(s)
 		}
 	}
+}
+
+func writeKML(coords []kml.Coordinate) {
+	k := kml.KML(
+		kml.Document(
+			kml.Name("MS Flight Simulator 2020 vfrmap/kml flight tracking"),
+			kml.Placemark(
+				kml.LineString(
+					kml.Extrude(true),
+					kml.AltitudeMode(kml.AltitudeModeAbsolute),
+					kml.Coordinates(coords...),
+				),
+			),
+		),
+	)
+	k.WriteIndent(os.Stdout, "", " ")
+	fmt.Println("Amount of coordinates written: ", len(coords))
 }
