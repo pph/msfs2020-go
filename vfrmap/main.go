@@ -150,13 +150,6 @@ func main() {
 	}
 
 	simonGroundRequest := &SimOnGroundRequest{}
-	/*
-		err = s.RegisterDataDefinition(simonGroundRequest)
-		if err != nil {
-			panic(err)
-		}
-	*/
-
 	s.AddToDataDefinition(s.GetDefineID(simonGroundRequest), "SIM ON GROUND", "Bool", simconnect.DATATYPE_INT32)
 
 	eventSimStartID := s.GetEventID()
@@ -201,6 +194,8 @@ func main() {
 	trafficPositionTick := time.NewTicker(10000 * time.Millisecond)
 	kmlCoordinateTick := time.NewTicker(3000 * time.Millisecond)
 
+	simonGroundRequest.IsOnGround = true
+
 	for {
 		select {
 		case <-planePositionTick.C:
@@ -216,15 +211,18 @@ func main() {
 			if !simonGroundRequest.IsOnGround {
 				if !inFlight {
 					inFlight = true
-					fmt.Println("Flight has started!")
 				}
 				coordinates = append(coordinates,
 					kml.Coordinate{report.Longitude, report.Latitude, report.Altitude})
 			} else {
 				if inFlight {
-					fmt.Println("Flight has stopped, writing KML...")
-					writeKML(coordinates)
-					coordinates = []kml.Coordinate{}
+					// quick workaround: SIM ON GROUND sometimes changes values even while being in the
+					// main menu, so we filter for those tracks which are longer than occasional on/off
+					// flickering
+					if len(coordinates) > 5 {
+						writeKML(coordinates)
+						coordinates = []kml.Coordinate{}
+					}
 					inFlight = false
 				}
 			}
@@ -313,7 +311,9 @@ func main() {
 
 				case s.DefineMap["SimOnGroundRequest"]:
 					simonGroundRequest = (*SimOnGroundRequest)(ppData)
-					fmt.Println("SIM ON GROUND: ", simonGroundRequest.IsOnGround)
+					if verbose {
+						fmt.Println("SIM ON GROUND: ", simonGroundRequest.IsOnGround)
+					}
 				}
 
 			default:
@@ -378,10 +378,15 @@ func handleClientMessage(m websockets.ReceiveMessage, s *simconnect.SimConnect) 
 }
 
 func writeKML(coords []kml.Coordinate) {
+	t := time.Now()
+	flightdate := fmt.Sprintf("%d-%02d-%02d-%02d%02d%02d",
+		t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second())
 	k := kml.KML(
 		kml.Document(
 			kml.Name("MS Flight Simulator 2020 vfrmap/kml flight tracking"),
 			kml.Placemark(
+				kml.Name("Flight Track"),
+				kml.Description(fmt.Sprintf("Recorded on %v", flightdate)),
 				kml.LineString(
 					kml.Extrude(true),
 					kml.AltitudeMode(kml.AltitudeModeAbsolute),
@@ -390,6 +395,11 @@ func writeKML(coords []kml.Coordinate) {
 			),
 		),
 	)
-	k.WriteIndent(os.Stdout, "", " ")
-	fmt.Println("Amount of coordinates written: ", len(coords))
+	filename := fmt.Sprintf("MSFlightSimulator-%v.kml", flightdate)
+	file, err := os.Create(filename)
+	if err != nil {
+		panic(err)
+	}
+	k.WriteIndent(file, "", " ")
+	fmt.Printf("Flight has ended.\nAmount of KML coordinates written to %v: %v\n", filename, len(coords))
 }
