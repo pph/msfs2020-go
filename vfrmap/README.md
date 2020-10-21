@@ -1,6 +1,6 @@
 # msfs2020-go/vfrmap
 
-local web-server using msfs2020-go/simconnect that will allow you to view your location, and some information about your trajectory including airspeed and altitude.
+local web-server using msfs2020-go/simconnect that will allow you to view your location, track your flight as KML, and some information about your trajectory including airspeed and altitude.
 
 also allows you to quickly teleport your plane to any location.
 
@@ -32,9 +32,15 @@ also allows you to quickly teleport your plane to any location.
 
 if you want to change how the webpage looks then copy and change [index.html](html/index.html) to the same folder as `vfrmap.exe` and relaunch the program.
 
+## KML flight tracking
+
+Flight tracking is configured to log KML files of your flights into the same directory you copied the `vfrmap.exe` into. KML flight tracking will automatically start recording as soon as you take off and stops when landing (or crashing) your plane. Files are written as `MSFlightSimulator-YYYY-MM-DD-HHMMSS.kml`
+At any time later you can open those files in your favourite KML viewer of your choice or even use [Google Earth Web](https://earth.google.com/web) if you choose to go lightweight.
+Google has some [instructions](https://support.google.com/earth/answer/7365595?co=GENIE.Platform%3DDesktop&hl=en) available on how to load KML files into your Google Earth Web session.
+
 ## openstreetmap
 
-earlier versions of this app used google maps directly, but this was too expensive. openstreetmap is free to use and very good as well.
+earlier versions of this app used google maps directly, but this was too expensive. openstreetmap is free to use and very good as well. Additionally KML files produced by the flight tracking feature will leverage Google Maps image material and elevation data when used with Google Earth for example, see previous section
 
 ## compile
 
