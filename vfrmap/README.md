@@ -37,6 +37,7 @@ if you want to change how the webpage looks then copy and change [index.html](ht
 Flight tracking is configured to log KML files of your flights into the same directory you copied the `vfrmap.exe` into. KML flight tracking will automatically start recording as soon as you take off and stops when landing (or crashing) your plane. Files are written as `MSFlightSimulator-YYYY-MM-DD-HHMMSS.kml`
 At any time later you can open those files in your favourite KML viewer of your choice or even use [Google Earth Web](https://earth.google.com/web) if you choose to go lightweight.
 Google has some [instructions](https://support.google.com/earth/answer/7365595?co=GENIE.Platform%3DDesktop&hl=en) available on how to load KML files into your Google Earth Web session.
+![KML flight tracking](https://i.imgur.com/I5e76L4.png)
 
 ## openstreetmap
 
